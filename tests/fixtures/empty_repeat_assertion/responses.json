@@ -1,0 +1,58 @@
+[
+  {
+    "response": "{\n  \"repairs\": [\n    {\n      \"path\": \"tests/test_domain.py\",\n      \"reason\": \"The test incorrectly uses pass inside assertRaises, so no AssertionError is raised; the second submit should be inside the context.\",\n      \"test_contract_error\": \"The test's assertRaises block contains pass instead of the second submit call, so it never triggers the expected AssertionError.\",\n      \"contract_evidence\": \"Session.submit raises AssertionError when called after answered is True; the test must call submit inside assertRaises to verify this.\",\n      \"replacements\": [\n        {\n          \"symbol\": \"SessionTests.test_repeated_submit_prevented\",\n          \"code\": \"    def test_repeated_submit_prevented(self):\\n        self.session.submit(\\\"3/4\\\")\\n        with self.assertRaises(AssertionError):\\n            self.session.submit(\\\"1/2\\\")\\n        self.assertEqual(self.session.attempted, 1)\\n        self.assertEqual(self.session.correct, 1)\"\n        }\n      ]\n    }\n  ]\n}",
+    "error": "Test correction removed test cases/assertions or added skips; original preserved.",
+    "category": "invalid_response",
+    "failure": {
+      "stage": "tests",
+      "failures": [
+        {
+          "nodeid": "tests/test_domain.py::SessionTests::test_repeated_submit_prevented",
+          "when": "call",
+          "message": "AssertionError: AssertionError not raised",
+          "traceback": "tests\\test_domain.py:180: in test_repeated_submit_prevented\n    with self.assertRaises(AssertionError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   AssertionError: AssertionError not raised",
+          "path": "D:\\CodeAgent_Project\\release\\Forge-Repair-v3-Windows-x64\\Forge\\runtime\\Lib\\unittest\\case.py",
+          "line": 200
+        }
+      ],
+      "groups": [
+        {
+          "when": "call",
+          "message": "AssertionError: AssertionError not raised",
+          "tests": [
+            "tests/test_domain.py::SessionTests::test_repeated_submit_prevented"
+          ],
+          "traceback": "tests\\test_domain.py:180: in test_repeated_submit_prevented\n    with self.assertRaises(AssertionError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   AssertionError: AssertionError not raised"
+        }
+      ]
+    }
+  },
+  {
+    "response": "{\n  \"repairs\": [\n    {\n      \"path\": \"tests/test_domain.py\",\n      \"reason\": \"The test's with block contains only pass, so no AssertionError is raised; the second submit call is outside the block and returns a normal result.\",\n      \"test_contract_error\": \"The test intended to assert that a repeated submit raises AssertionError, but the assertion is not actually executed because the with block is empty.\",\n      \"contract_evidence\": \"FR-13: Session.submit scores each question exactly once; repeated submission must be prevented. The test name test_repeated_submit_prevented and its assertions require that the second submit raises AssertionError.\",\n      \"replacements\": [\n        {\n          \"symbol\": \"SessionTests.test_repeated_submit_prevented\",\n          \"code\": \"    def test_repeated_submit_prevented(self):\\n        self.session.submit(\\\"3/4\\\")\\n        with self.assertRaises(AssertionError):\\n            self.session.submit(\\\"1/2\\\")\\n        self.assertEqual(self.session.attempted, 1)\\n        self.assertEqual(self.session.correct, 1)\"\n        }\n      ]\n    }\n  ]\n}",
+    "error": "Test correction removed test cases/assertions or added skips; original preserved.",
+    "category": "invalid_response",
+    "failure": {
+      "stage": "tests",
+      "failures": [
+        {
+          "nodeid": "tests/test_domain.py::SessionTests::test_repeated_submit_prevented",
+          "when": "call",
+          "message": "AssertionError: AssertionError not raised",
+          "traceback": "tests\\test_domain.py:180: in test_repeated_submit_prevented\n    with self.assertRaises(AssertionError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   AssertionError: AssertionError not raised",
+          "path": "D:\\CodeAgent_Project\\release\\Forge-Repair-v3-Windows-x64\\Forge\\runtime\\Lib\\unittest\\case.py",
+          "line": 200
+        }
+      ],
+      "groups": [
+        {
+          "when": "call",
+          "message": "AssertionError: AssertionError not raised",
+          "tests": [
+            "tests/test_domain.py::SessionTests::test_repeated_submit_prevented"
+          ],
+          "traceback": "tests\\test_domain.py:180: in test_repeated_submit_prevented\n    with self.assertRaises(AssertionError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   AssertionError: AssertionError not raised"
+        }
+      ]
+    }
+  }
+]
