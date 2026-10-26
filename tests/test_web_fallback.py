@@ -64,3 +64,32 @@ def test_browser_secret_is_never_written_into_static_source():
     page = (Path(__file__).resolve().parents[1]/'fallback/index.html').read_text(encoding='utf-8')
     assert '__FORGE_TOKEN__' in page
     assert 'localStorage' not in page and 'sessionStorage' not in page
+
+
+def test_folder_chooser_lists_existing_folders_and_does_not_create_paths(tmp_path):
+    (tmp_path/'Games').mkdir()
+    (tmp_path/'file.txt').write_text('not a directory')
+    app = WebAgent(tmp_path)
+    state = app.folders({'path':str(tmp_path/'not-created')})
+    assert state['path']==str(tmp_path.resolve())
+    assert state['folders']==[{'name':'Games','path':str(tmp_path/'Games')}]
+    assert not (tmp_path/'not-created').exists()
+    with pytest.raises(ValueError):
+        app.folders({'path':'relative/path'})
+
+
+def test_build_existing_needs_no_key_and_preserves_usage(tmp_path):
+    (tmp_path/'main.py').write_text('# Offline transport fixture')
+    (tmp_path/'.agent').mkdir()
+    requests=[{'budget_charge':.13}]
+    (tmp_path/'.agent/run.json').write_text(json.dumps({'status':'needs_attention','requests':requests}))
+    executable=tmp_path/'SpaceFractions.exe'
+    executable.write_bytes(b'Offline test fixture; not runnable')
+    app=WebAgent(tmp_path)
+    with patch.object(forge,'build_desktop',return_value=executable) as build:
+        app.build_existing({'project':str(tmp_path)})
+        app.thread.join(3)
+    assert build.call_args.args[0]==tmp_path
+    assert app.snapshot()['exe_ready']
+    saved=json.loads((tmp_path/'.agent/run.json').read_text())
+    assert saved['requests']==requests and saved['status']=='complete'

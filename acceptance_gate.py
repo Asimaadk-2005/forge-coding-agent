@@ -435,7 +435,18 @@ def check_app(root, app, basic=None):
     passed.append('question progression and final results')
     from storage import Store
     saved=Store(app.data_dir).load_scores()
-    require(bool(saved),'the completed score is saved')
+    if not saved:
+        diagnostic = {'category':'score_persistence','path':'storage.py','symbol':'Store.load_scores',
+                      'expected':'Read back the completed score written by Store.save_score.'}
+        score_path = getattr(app.store, 'scores_path', None)
+        if score_path and Path(score_path).is_file() and Path(score_path).resolve().is_relative_to(Path(app.data_dir).resolve()):
+            try:
+                raw = json.loads(Path(score_path).read_text(encoding='utf-8'))
+                diagnostic.update(json_type=type(raw).__name__, json_keys=list(raw) if isinstance(raw,dict) else [],
+                                  records_on_disk=len(raw.get('scores',[])) if isinstance(raw,dict) and isinstance(raw.get('scores'),list) else None)
+            except (OSError,ValueError):
+                pass
+        raise AcceptanceFailure('the completed score is saved', diagnostic)
     require(any(r.get('correct')==session.correct and r.get('total')==total for r in saved),'saved score matches the completed round')
     passed.append('score persistence')
     click('replay')

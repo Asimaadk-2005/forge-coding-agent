@@ -56,6 +56,66 @@ class WebAgent:
             raise ValueError(str(error).replace(key, '[REDACTED]')) from None
         return {'message':'Key and selected model are available.'}
 
+    def folders(self, payload):
+        path = Path(str(payload.get('path') or self.output)).expanduser()
+        if not path.is_absolute():
+            raise ValueError('Enter an absolute folder path.')
+        while not path.exists() and path.parent != path:
+            path = path.parent
+        if not path.is_dir():
+            raise ValueError('That folder is not available.')
+        path = path.resolve()
+        try:
+            children = []
+            for child in path.iterdir():
+                try:
+                    if not child.name.startswith('.') and child.is_dir():
+                        children.append({'name':child.name,'path':str(child)})
+                except OSError:
+                    continue
+        except OSError:
+            raise ValueError('This folder cannot be opened by the current Windows user.') from None
+        anchors = [{'name':'Home','path':str(Path.home())}]
+        if os.name == 'nt':
+            mask = forge.ctypes.windll.kernel32.GetLogicalDrives()
+            anchors.extend({'name':chr(65+i)+':','path':chr(65+i)+':\\'} for i in range(26) if mask & (1 << i))
+        else:
+            anchors.append({'name':'Root','path':'/'})
+        return {'path':str(path),'parent':str(path.parent), 'anchors':anchors,
+                'folders':sorted(children,key=lambda item:item['name'].casefold())}
+
+    def build_existing(self, payload):
+        project = Path(str(payload.get('project',''))).expanduser()
+        if not project.is_absolute() or not (project/'main.py').is_file():
+            raise ValueError('Choose an existing generated project folder containing main.py.')
+        project = project.resolve()
+        with self.lock:
+            if self.busy:
+                raise ValueError('A generation or build is already running.')
+            self.events = queue.Queue()
+            self.cancel = threading.Event()
+            self.busy, self.source_ready = True, True
+            self.project, self.executable = project, None
+            self.usage, self.logs = {}, ['Building saved source locally — no model requests or API key needed.']
+            self.phase = 'Building saved project'
+            self.thread = threading.Thread(target=self._build_worker,args=(project,),daemon=True)
+            self.thread.start()
+        return {'message':'Local rebuild started. No API requests.'}
+
+    def _build_worker(self, project):
+        try:
+            self.events.put(('project',str(project)))
+            executable = forge.build_desktop(project,Path(sys.executable),
+                lambda kind,value:self.events.put((kind,value)),self.cancel)
+            receipt = project/'.agent/run.json'
+            if receipt.is_file():
+                state = json.loads(receipt.read_text(encoding='utf-8'))
+                state['status'] = 'complete'
+                receipt.write_text(json.dumps(state,indent=2),encoding='utf-8')
+            self.events.put(('done',(project,executable,0)))
+        except Exception as error:
+            self.events.put(('error',str(error)))
+
     def start(self, payload):
         key, provider, model = self.settings(payload)
         task = str(payload.get('task', '')).strip()
@@ -231,6 +291,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('Expected a JSON object.')
             if self.path == '/api/check-key':
                 response = self.server.app.check_key(payload)
+            elif self.path == '/api/folders':
+                response = self.server.app.folders(payload)
+            elif self.path == '/api/build':
+                response = self.server.app.build_existing(payload)
             elif self.path == '/api/generate':
                 response = self.server.app.start(payload)
             elif self.path == '/api/stop':

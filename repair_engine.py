@@ -15,7 +15,7 @@ class NoProgressRepair(ValueError):
 
 def boundary_focus(failure, originals, table):
     evidence = failure.get("diagnostics") or {}
-    if evidence.get("category") not in (None, "answer_round_trip"):
+    if evidence.get("category") not in (None, "answer_round_trip", "score_persistence"):
         return None
     path, symbol = evidence.get("path"), evidence.get("symbol")
     if path in originals and symbol in table[path]:
@@ -44,6 +44,10 @@ def focused_retry(instruction, failure, originals, table, rejected_units, previo
             "equivalent fractions and whole-number answers. Preserve exact Fraction values; no "
             "decimal approximation, precision tolerance or mixed-number requirements. Invalid input "
             "does not score; repeated submissions cannot score again.")
+    if (failure.get('diagnostics') or {}).get('category') == 'score_persistence':
+        requirements = ('Store.load_scores must return the score list written by Store.save_score, including its JSON envelope. '
+            'Inspect the observed on-disk schema and unwrap the scores list. Preserve existing records and id deduplication. '
+            'Do not rewrite the controller when the score record already exists on disk.')
     introduction = ("The previous response made no executable change; repair the observed boundary instead. "
                     if previous_response else "Repair the independently observed failing boundary. ")
     return ("Return ONLY the repairs JSON schema. " + introduction +

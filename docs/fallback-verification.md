@@ -1,5 +1,31 @@
 # Optional fallback backup
 
+## Version 2 correction
+
+The real user run SpaceFractions_5nlfafyp wrote a versioned score envelope but
+load_scores accepted only a plain list. Its score existed on disk but was discarded
+when reloaded; model repairs had incorrectly targeted the controller. The shared
+contract adapter now unwraps a scores envelope when the generated writer and raw
+reader reveal this exact mismatch, preserving legacy plain lists and existing
+records. Future repair evidence names Store.load_scores and the observed disk schema.
+Missing Session.total_attempts() aliases also map to the existing attempted field.
+The generation contract describes these boundaries explicitly.
+
+Version 2 adds Choose path (a browser-only folder chooser) and Build saved project
+without an API key. The failed real project was rebuilt through /api/build, passed
+source/packaged gameplay and score-persistence checks, and produced SpaceFractions.exe.
+Its actual EXE download was hash-checked against the built file. Its usage ledger
+was unchanged: zero new model requests. Optional generated editor tests remain
+warnings (34 passed, two failed).
+
+136 guarded offline tests passed. HTTP tests include authenticated folder listing.
+Browser inspection verified Choose path, folder navigation and Use this folder
+setting D:\\ForgeTests; the completed real-game download remained enabled with warnings.
+Evidence is under prototype-tests/fallback-v2. The original desktop ZIP is unchanged.
+
+Release: Forge-Web-Backup-v2-Windows-x64.zip. Restart the old backend before opening
+the updated package on the default port; running Python processes do not hot-reload.
+
 Task1-EN.docx states: "[Fallback requirement]: If you encounter intractable
 engineering obstacles when building the Windows desktop .exe, you may submit a
 CLIlaunched webbased version as alternative." It adds that users interact through

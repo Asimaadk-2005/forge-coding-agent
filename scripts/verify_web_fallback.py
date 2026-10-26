@@ -63,6 +63,9 @@ def run():
             assert request('GET','/api/state',origin='https://other.example')[0]==403
             assert request('GET','/api/state',host='other.example')[0]==403
             assert request('GET','/api/game.exe')[0]==404
+            (Path(directory)/'Chosen folder').mkdir()
+            status,folders = request('POST','/api/folders',{'path':directory})
+            assert status==200 and any(f['name']=='Chosen folder' for f in json.loads(folders)['folders'])
             data = {'key':'offline-fixture-key','provider':'DeepSeek','model':'deepseek-v4-pro',
                     'task':'Transport fixture only','output':directory,
                     'documents':[{'name':'Architecture.md','text':'Fixture document'}]}

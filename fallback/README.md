@@ -11,10 +11,16 @@ separate backup, not a replacement or an extra evaluation requirement.
 2. In Command Prompt, change to that folder and run `Forge-Web.cmd`.
 3. Keep the terminal open and visit `http://127.0.0.1:8765/` in a browser.
 4. Enter a provider key, select the two Markdown files from inputs, enter the task
-   and output directory, and click Generate game.
+   and output directory (or use Choose path), and click Generate game.
 5. Download the generated game EXE/source ZIP in the browser. The original EXE and
    sources also remain in the output project folder. The game itself is desktop.
 6. Press Ctrl+C in the terminal when finished.
+
+**Build saved project · no API** rebuilds an existing generated folder containing
+main.py without a key, new generation or model repair calls. Use this after a local
+update when the source is already complete. Optional test warnings keep the verified
+EXE download available. Choose path browses folders inside the web page; no native
+desktop dialog is needed.
 
 The portable backup includes its own runtime; no Python installation is needed.
 From source, development Python 3.12 and requirements.txt are needed:

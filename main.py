@@ -1609,6 +1609,56 @@ def normalize_question_api(project, emit=lambda kind, value: None):
     return record
 
 
+def normalize_score_storage_api(project, emit=lambda kind, value: None):
+    """Unwrap a raw score envelope only when the generated writer uses that schema."""
+    path = project / 'storage.py'
+    if not path.is_file() or path.is_symlink():
+        return
+    original = path.read_bytes()
+    source = original.decode('utf-8-sig')
+    tree = ast.parse(source)
+    store = next((n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Store'), None)
+    if store is None:
+        return
+    methods = {n.name:n for n in store.body if isinstance(n, ast.FunctionDef)}
+    loader, writer, reader = (methods.get(n) for n in ('load_scores','save_score','_read_json'))
+    if not all((loader,writer,reader)):
+        return
+    # A loader that already unwraps the envelope is left alone.
+    if any(isinstance(n, ast.Constant) and n.value == 'scores' for n in ast.walk(loader)):
+        return
+    envelope = any(isinstance(n, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == 'scores' for k in n.keys if k is not None) for n in ast.walk(writer))
+    raw_json = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name) and n.func.value.id == 'json' and n.func.attr in ('load','loads') for n in ast.walk(reader))
+    assignments = [n for n in loader.body if isinstance(n, ast.Assign) and len(n.targets)==1 and isinstance(n.targets[0], ast.Name)
+                   and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Attribute) and n.value.func.attr == '_read_json']
+    if not envelope or not raw_json or len(assignments)!=1:
+        return
+    assignment = assignments[0]
+    variable = assignment.targets[0].id
+    if not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'isinstance'
+               and len(n.args)==2 and isinstance(n.args[0], ast.Name) and n.args[0].id == variable
+               and isinstance(n.args[1], ast.Name) and n.args[1].id == 'list' for n in ast.walk(loader)):
+        return
+    lines = source.splitlines(keepends=True)
+    indent = ' ' * assignment.col_offset
+    lines.insert(assignment.end_lineno, f'{indent}if isinstance({variable}, dict):\n{indent}    {variable} = {variable}.get("scores", [])\n')
+    updated = ''.join(lines).encode('utf-8')
+    ast.parse(updated)
+    before = hashlib.sha256(original).hexdigest()
+    backup = project / '.agent/api-normalization'
+    if not backup.resolve().is_relative_to(project):
+        raise ValueError('API normalization backup points outside the project.')
+    backup.mkdir(parents=True, exist_ok=True)
+    (backup / (before + '-storage.py.txt')).write_bytes(original)
+    path.write_bytes(updated)
+    record = {'path':'storage.py','before':before,'after':hashlib.sha256(updated).hexdigest(),
+              'change':'Read the same scores envelope written by save_score; retain plain-list compatibility','api_requests':0}
+    with (backup / 'receipts.jsonl').open('a', encoding='utf-8') as log:
+        log.write(json.dumps(record)+'\n')
+    emit('phase','Aligned score JSON reader with its writer (local; no API request)')
+    return record
+
+
 def normalize_generation_api(project, emit=lambda kind, value: None):
     receipt = project / '.agent/run.json'
     if not receipt.is_file():
@@ -1616,7 +1666,7 @@ def normalize_generation_api(project, emit=lambda kind, value: None):
     if not receipt.is_file() or json.loads(receipt.read_text(encoding='utf-8')).get('desktop_contract') != 3:
         return {}
     changed = {}
-    for adapter in (normalize_question_api, normalize_session_api):
+    for adapter in (normalize_question_api, normalize_session_api, normalize_score_storage_api):
         record = adapter(project, emit)
         if record:
             changed[record['path']] = record['after']
@@ -1644,12 +1694,9 @@ def normalize_session_api(project, emit=lambda kind, value: None):
     session = next((n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Session"), None)
     if session is None:
         return
-    if any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "total" for n in session.body):
-        return
+    methods = {n.name for n in session.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
     fields = {n.attr for n in ast.walk(session) if isinstance(n, ast.Attribute)
               and isinstance(n.value, ast.Name) and n.value.id == "self" and isinstance(n.ctx, ast.Store)}
-    if "total" in fields or "questions" not in fields:
-        return
     original = app.read_bytes()
     source = original.decode("utf-8-sig")
     app_tree = ast.parse(source)
@@ -1668,15 +1715,20 @@ def normalize_session_api(project, emit=lambda kind, value: None):
         offsets.append(offsets[-1] + len(line))
     edits = []
     for node in ast.walk(controller):
-        if (isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load) and node.attr == "total"
+        if (isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load) and node.attr == "total" and 'total' not in methods|fields and 'questions' in fields
                 and isinstance(node.value, ast.Attribute) and node.value.attr == "session"
                 and isinstance(node.value.value, ast.Name) and node.value.value.id == "self"):
             edits.append((offsets[node.lineno - 1] + node.col_offset,
-                          offsets[node.end_lineno - 1] + node.end_col_offset))
+                          offsets[node.end_lineno - 1] + node.end_col_offset, b"len(self.session.questions)"))
+        if (isinstance(node, ast.Call) and not node.args and not node.keywords and isinstance(node.func, ast.Attribute)
+                and node.func.attr == 'total_attempts' and 'total_attempts' not in methods|fields and 'attempted' in fields
+                and isinstance(node.func.value, ast.Attribute) and node.func.value.attr == 'session'
+                and isinstance(node.func.value.value, ast.Name) and node.func.value.value.id == 'self'):
+            edits.append((offsets[node.lineno-1]+node.col_offset, offsets[node.end_lineno-1]+node.end_col_offset,b'self.session.attempted'))
     if not edits:
         return
-    for start, end in sorted(edits, reverse=True):
-        data = data[:start] + b"len(self.session.questions)" + data[end:]
+    for start, end, replacement in sorted(edits, reverse=True):
+        data = data[:start] + replacement + data[end:]
     ast.parse(data)
     before = hashlib.sha256(original).hexdigest()
     control = project / ".agent/api-normalization"
@@ -1686,7 +1738,7 @@ def normalize_session_api(project, emit=lambda kind, value: None):
     (control / (before + "-app.py.txt")).write_bytes(original)
     app.write_bytes(data)
     record = {"path": "app.py", "before": before, "after": hashlib.sha256(data).hexdigest(),
-              "change": "Session.total -> len(Session.questions)", "occurrences": len(edits), "api_requests": 0}
+              "change": "Resolve missing Session total/total_attempts aliases to published fields", "occurrences": len(edits), "api_requests": 0}
     with (control / "receipts.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps(record) + "\n")
     if receipt.name == "run.json" and state.get("completed", {}).get("app.py") == before:
@@ -1942,7 +1994,7 @@ def cloud_builder_source():
     header = "import ast, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time\nfrom pathlib import Path\nfrom threading import Event\n"
     source = "\n".join([header, "class Cancelled(RuntimeError):\n    pass\n",
         "ASSET_EXTENSIONS = set(" + repr(sorted(ASSET_EXTENSIONS)) + ")", "BUILD_EXCLUDED = set(" + repr(sorted(BUILD_EXCLUDED)) + ")"] +
-        [inspect.getsource(f) for f in (asset_text, default_builder_python, process_environment, run_build_command, startup_hook, protected_foundation, product_acceptance, normalize_question_api, normalize_generation_api, normalize_session_api,
+        [inspect.getsource(f) for f in (asset_text, default_builder_python, process_environment, run_build_command, startup_hook, protected_foundation, product_acceptance, normalize_question_api, normalize_score_storage_api, normalize_generation_api, normalize_session_api,
             smoke_desktop, validate_desktop, build_desktop)])
     return source + '\nif __name__ == "__main__":\n    build_desktop(Path(__file__).resolve().parents[1], smoke="--skip-startup" not in sys.argv)\n'
 

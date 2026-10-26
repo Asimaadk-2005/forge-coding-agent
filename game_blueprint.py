@@ -25,6 +25,7 @@ an impossible assertion. Keep files compact.
 FILES = dict(legacy_blueprint.FILES)
 FILES['domain.py'] = ([], "Question(id: str, prompt: str, answer: Fraction, explanation: str='') dataclass; parse_answer(text: str)->Fraction accepts a/b and non-negative whole numbers, strips whitespace, raises ValueError for malformed input or zero denominator; check_answer(answer: Fraction,text: str)->bool compares EXACT Fraction equality and returns False for invalid input. Session(questions: list[Question]): index=0, correct=0, attempted=0, answered=False; current()->Question|None; submit(text)->tuple[bool,str] scores once, invalid input does not consume an attempt, repeated/finished submit returns (False, message) WITHOUT raising; next()->Question|None returns None without advancing before submission, otherwise advances once; finished property; accuracy property 0..100. No GUI imports.")
 FILES['content.py'] = (['domain.py'], "default_questions()->list[Question]: at least 20 unique simple TWO-operand fraction questions across addition, subtraction, multiplication and division. Positive operands with denominators 2..12, small numerators, and non-negative answers. NO negatives, mixed numbers, chained expressions or decimals. Stable IDs and short explanations. TITLE, SUBTITLE, HELP_TEXT. Help says enter a fraction such as 3/4 or a whole number such as 1.")
+FILES['storage.py'] = (['domain.py','content.py'], legacy_blueprint.FILES['storage.py'][1] + ' Score JSON writes an envelope with a scores list; load_scores must unwrap that list. Never reject your own written dictionary as though it should be a plain list. Verify save_score(record) then a NEW Store(data_dir).load_scores() returns that record, and a second save preserves the first record.')
 FILES['tests/test_domain.py'] = (['domain.py','content.py','storage.py'], "Compact tests for ordinary fraction/whole-number parsing, equivalent fractions (2/4 equals 1/2), every default answer round-trip, invalid input, scoring once, progression and temporary-directory persistence. Repeat submission returns False without changing score or attempted; test those real state invariants. No decimal, tolerance, scientific, negative or mixed-number tests. Never create an empty assertRaises context.")
 FILES['tests/test_app.py'] = (['domain.py','storage.py','forge_ui.py','app.py','main.py'], "Real Tk tests using ONLY app.widgets[role] Entry.get/delete/insert, Button.invoke and Listbox selection/events. Fresh temporary data per test; capture callback errors. Check visible first question, exact fraction scoring, explicit Next through all questions, results, replay, help and real admin CRUD/reload. Read the actual current answer; never assume a fixed answer or finish a multi-question session after one Next. Reacquire controls after navigation. app.close destroys root, so call it once in cleanup. No decimal/precision tests or invented private APIs.")
 
@@ -50,6 +51,7 @@ Next advances once only after submission, rendering results after the final answ
 results: summary(label correct/total and accuracy), replay(button), menu(button).
 The total question count is len(self.session.questions). Session has no total
 attribute in this API: do not read self.session.total. Use the actual domain API.
+Attempts are self.session.attempted; do not invent total_attempts().
 Question.answer must always be a Fraction at runtime, including the FIRST load
 of built-in questions. Question.__post_init__ normalizes its answer with Fraction;
 content.py imports Fraction and constructs answers as Fraction('3/4'), not strings.
@@ -64,6 +66,8 @@ errors, preserve IDs, persist real Add/Save/Delete, and do not delete the last q
 Store questions and scores in the supplied data directory using JSON, atomic writes
 and recovery. Score records: unique per-session id, correct, total, accuracy, ISO timestamp.
 Saving a session twice must not duplicate it; rapid replay gets a fresh id.
+Store.load_scores must read the format Store.save_score actually writes: unwrap
+the scores array from the JSON envelope. A dictionary envelope is not corrupt data.
 Tests use actual controls, actual answers and valid numeric wrong answers. Test
 repeat prevention by checking the returned False and unchanged score/attempts, not
 an invented exception. assertRaises bodies must EXECUTE the invalid operation;

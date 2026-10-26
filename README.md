@@ -26,7 +26,7 @@ runtime independence was checked on the development PC with Windows-only PATH.
 
 ## Demonstration
 
-Demonstration video: add the final unlisted YouTube link here before submission.
+Demonstration video: https://youtu.be/qcEGNtRQ5mk
 
 ## Design and attribution
 
@@ -90,8 +90,17 @@ See docs/known-limitations.md for execution and environment limitations.
 The working Windows desktop package is the primary submission. Task 1 permits a
 CLI-launched browser alternative for intractable desktop-build obstacles, with a
 partial engineering-point deduction. A separate portable backup is available as
-Forge-Web-Backup-Windows-x64.zip. See [fallback instructions](fallback/README.md)
+Forge-Web-Backup-v2-Windows-x64.zip. See [fallback instructions](fallback/README.md)
 and [offline verification](docs/fallback-verification.md). From development source,
 run `python fallback/web_agent.py`; the portable backup includes its own runtime.
 Fallback verification made no provider requests; mocked downloads are explicitly
 labeled as test fixtures. The expanded guarded agent suite passed 131 tests.
+
+### Fallback version 2
+
+Choose path browses local folders inside the web page. Build saved project rebuilds
+existing generated source locally without a key or model requests. The score reader
+now unwraps the JSON envelope its writer produces; raw-list compatibility remains.
+The failed real run passed source/frozen gameplay and score persistence after the
+local correction and produced its EXE, with its usage ledger unchanged. The guarded
+agent suite passed 136 tests. Restart an old running backend to load the update.
