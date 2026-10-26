@@ -1,0 +1,23 @@
+# Python caches and local development
+__pycache__/
+.pytest_cache/
+.venv/
+.vscode/
+*.py[cod]
+
+# Local credentials
+.env
+.env.*
+
+# Generated files and application data
+.agent/
+runtime/
+release/
+prototype-tests/
+generated-projects/
+output/
+*.exe
+*.zip
+*.mp4
+*.log
+*.db
